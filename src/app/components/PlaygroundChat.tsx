@@ -129,7 +129,7 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
             </div>
             <div className="flex-grow relative bg-gray-50 dark:bg-gray-900">
               {panel.isMatrixVisible && panel.usage && (
-                <div className="absolute top-[40px] right-[80%] z-30 w-full p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-lg">
+                <div className="absolute top-[40px] right-[93%] z-30 w-[400px] p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-lg">
                   <p className="font-semibold text-gray-800 dark:text-gray-200">
                     Inference Details for {panel.selectedModel}
                   </p>
