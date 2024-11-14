@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Send, User, Bot, Clipboard, Check } from 'lucide-react'
-import { Alert } from '@/components/ui/alert'
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -42,7 +41,8 @@ export default function ChatSection({
             setCopied(true)
             toast.success("Copied to clipboard!")
             setTimeout(() => setCopied(false), 2000)
-        } catch (err) {
+        } catch (error) {
+            console.log(error)
             toast.error("Failed to copy text")
         }
     }
