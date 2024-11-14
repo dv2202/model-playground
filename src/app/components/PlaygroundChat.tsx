@@ -110,7 +110,7 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
     <div className="relative w-full h-full flex rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300">
       {chatPanels.map((panel, index) => (
         <div key={panel.id} className="flex-1 flex flex-col border dark:border-gray-700">
-          <div className="p-2 h-auto flex flex-row justify-between bg-gray-100 dark:bg-gray-900 border-b dark:border-gray-700">
+          <div className="p-2 h-auto flex flex-row justify-between  border-b dark:border-gray-700">
             <div className="flex gap-3">
               <ModelsDropdown
                 options={models}
@@ -127,7 +127,7 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
                 </button>
               )}
             </div>
-            <div className="flex-grow relative bg-gray-50 dark:bg-gray-900">
+            <div className="flex-grow relative ">
               {panel.isMatrixVisible && panel.usage && (
                 <div className="absolute top-[40px] right-[93%] z-30 w-[400px] p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-lg">
                   <p className="font-semibold text-gray-800 dark:text-gray-200">
