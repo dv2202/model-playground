@@ -17,11 +17,19 @@ interface ChatPanel {
   response: string;
   usage: CompletionUsage | null;
   isMatrixVisible: boolean; 
+  conversation: { question: string; response: string }[]; 
 }
 
 export default function PlaygroundChat({ models }: PlaygroundChatProps) {
   const [chatPanels, setChatPanels] = useState<ChatPanel[]>([
-    { id: 1, selectedModel: models[0]?.id || null, response: "", usage: null, isMatrixVisible: false }
+    {
+      id: 1,
+      selectedModel: models[0]?.id || null,
+      response: "",
+      usage: null,
+      isMatrixVisible: false,
+      conversation: [] 
+    }
   ]);
   const [sharedContent, setSharedContent] = useState<string>("");
   const client = new Groq({
@@ -35,7 +43,8 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
       selectedModel: models[chatPanels.length % models.length]?.id || null,
       response: "",
       usage: null,
-      isMatrixVisible: false
+      isMatrixVisible: false,
+      conversation:[]
     };
     setChatPanels((prev) => [...prev, newPanel]);
   };
@@ -55,6 +64,8 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
   const handleContentChange = (newContent: string) => {
     setSharedContent(newContent);
   };
+
+
   const handleSubmitAll = async () => {
     const missingModelPanel = chatPanels.find((panel) => panel.selectedModel === null);
     if (missingModelPanel) {
@@ -77,10 +88,22 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
             ...panel,
             response: completionText,
             usage: usageDetails || null,
+            conversation: [
+              ...panel.conversation,
+              { question: sharedContent, response: completionText }
+            ]
           };
         } catch (error) {
           console.error("Error:", error);
-          return { ...panel, response: "Error fetching response.", usage: null };
+          return { 
+            ...panel, 
+            response: "Error fetching response.", 
+            usage: null,
+            conversation: [
+              ...panel.conversation,
+              { question: sharedContent, response: "Error fetching response." }
+            ]
+          };
         }
       })
     );
@@ -107,7 +130,7 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
   };
 
   return (
-    <div className="relative w-full h-full flex rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300">
+    <div className="relative w-full h-full flex rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300 overflow-x-auto">
       {chatPanels.map((panel, index) => (
         <div key={panel.id} className="flex-1 flex flex-col border dark:border-gray-700">
           <div className="p-2 h-auto flex flex-row justify-between  border-b dark:border-gray-700">
@@ -123,7 +146,7 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
                   onMouseEnter={() => handleMouseEnter(panel.id)}
                   onMouseLeave={() => handleMouseLeave(panel.id)}
                 >
-                  Hover to view inference details
+                view inference 
                 </button>
               )}
             </div>
@@ -183,6 +206,7 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
               onContentChange={handleContentChange}
               responseText={panel.response}
               handleSubmit={() => handleSubmitAll()}
+              conversation={panel.conversation}
             />
           </div>
         </div>

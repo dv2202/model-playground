@@ -35,6 +35,8 @@ export default function ModelsDropdown({
     };
   }, []);
 
+  const buttonText = selectedModel || placeholder;
+
   return (
     <div ref={dropdownRef} className="relative w-[350px]">
       <Button
@@ -45,7 +47,7 @@ export default function ModelsDropdown({
         onClick={() => setIsOpen((prev) => !prev)}
       >
         <span className="block truncate">
-          {selectedModel || <span className="text-gray-400 dark:text-gray-500">{placeholder}</span>}
+          {buttonText}
         </span>
         <ChevronDown
           className={cn(
@@ -70,7 +72,7 @@ export default function ModelsDropdown({
                     selectedModel === option.id ? "bg-blue-50 dark:bg-blue-900/50" : "hover:bg-gray-50 dark:hover:bg-gray-700"
                   )}
                   onClick={() => {
-                    onModelChange(option.id);
+                    onModelChange(option.id); 
                     setIsOpen(false);
                   }}
                   role="option"

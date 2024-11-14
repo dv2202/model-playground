@@ -8,7 +8,8 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { toast } from "react-hot-toast"
-
+import ReactMarkdown from "react-markdown"
+import useGenerateStore from "../lib/generateText"
 type RoleType = "user" | "assistant"
 
 interface ChatSectionProps {
@@ -17,6 +18,7 @@ interface ChatSectionProps {
     onContentChange: (newContent: string) => void
     responseText: string
     handleSubmit: () => void
+    conversation: { question: string; response: string }[]
 }
 
 export default function ChatSection({
@@ -24,10 +26,11 @@ export default function ChatSection({
     onContentChange,
     responseText,
     handleSubmit: handleSubmitProp,
+    conversation
 }: ChatSectionProps) {
     const [selectedRole, setSelectedRole] = useState<RoleType>("user")
     const [copied, setCopied] = useState(false)
-    const [isGenerating, setIsGenerating] = useState(false)
+    const {isGenerating,setIsGenerating} = useGenerateStore()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const responseRef = useRef<HTMLDivElement>(null)
 
@@ -49,7 +52,7 @@ export default function ChatSection({
 
     const handleSubmit = async () => {
         setIsGenerating(true)
-        await handleSubmitProp()
+        await handleSubmitProp() 
         setIsGenerating(false)
     }
 
@@ -57,14 +60,16 @@ export default function ChatSection({
         if (responseRef.current) {
             responseRef.current.scrollTop = responseRef.current.scrollHeight
         }
-    }, [responseText])
+    }, [conversation])
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
             handleSubmit()
         }
-    }
+    }   
+
+    console.log("this is conversations",conversation)
 
     const adjustTextareaHeight = () => {
         if (textareaRef.current) {
@@ -80,22 +85,14 @@ export default function ChatSection({
     return (
         <Card className="flex flex-col h-full w-full">
             <CardContent className="flex-grow p-4 space-y-4">
-                <ScrollArea className="h-[calc(100vh-250px)] w-full rounded-md border">
-                    {isGenerating && (
-                        <div className="flex items-center justify-center h-12 bg-muted">
-                            <div className="animate-pulse flex space-x-1">
-                                <div className="w-1 h-1 bg-foreground rounded-full"></div>
-                                <div className="w-1 h-1 bg-foreground rounded-full"></div>
-                                <div className="w-1 h-1 bg-foreground rounded-full"></div>
-                            </div>
-                        </div>
-                    )}
-                    {responseText ? (
-                        <div className="relative group p-4">
-                            <Button
+                <ScrollArea className="h-[calc(100vh-350px)] w-full rounded-md border">
+                    {conversation.length > 0 ? (
+                        conversation.map((item, index) => (
+                            <div key={index} className="p-4 realtive group">
+                                <Button
                                 variant="ghost"
                                 size="icon"
-                                className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute right-2 top-2 opacity-100 "
                                 onClick={copyToClipboard}
                             >
                                 {copied ? (
@@ -105,8 +102,14 @@ export default function ChatSection({
                                 )}
                                 <span className="sr-only">Copy to clipboard</span>
                             </Button>
-                            <pre className="text-sm whitespace-pre-wrap font-sans">{responseText}</pre>
-                        </div>
+                                <p className="font-semibold ">{selectedRole.toLocaleUpperCase()}:</p>
+                                <pre className="text-sm whitespace-pre-wrap font-sans mb-2 border-blue-200">{item.question}</pre>
+                                <p className="font-semibold ">Response</p>
+                                <ReactMarkdown className="text-sm font-sans prose dark:prose-dark">
+                                    {item.response}
+                                </ReactMarkdown>
+                            </div>
+                        ))
                     ) : (
                         <div className="h-full flex items-center justify-center text-muted-foreground">
                             <p className="text-sm">Responses will appear here</p>
@@ -118,11 +121,11 @@ export default function ChatSection({
                 <div className="flex items-center justify-between w-full">
                     <ToggleGroup type="single" value={selectedRole} onValueChange={toggleRole}>
                         <ToggleGroupItem value="user" aria-label="Toggle user role">
-                            <User className="h-4 w-4 mr-2" />
+                            <User className="h-4 w-4" />
                             User
                         </ToggleGroupItem>
                         <ToggleGroupItem value="assistant" aria-label="Toggle assistant role">
-                            <Bot className="h-4 w-4 mr-2" />
+                            <Bot className="h-4 w-4 " />
                             Assistant
                         </ToggleGroupItem>
                     </ToggleGroup>
