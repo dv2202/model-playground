@@ -10,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { toast } from "react-hot-toast"
 import ReactMarkdown from "react-markdown"
 import useGenerateStore from "../lib/generateText"
+import { GoPencil } from "react-icons/go";
 type RoleType = "user" | "assistant"
 
 interface ChatSectionProps {
@@ -19,6 +20,12 @@ interface ChatSectionProps {
     responseText: string
     handleSubmit: () => void
     conversation: { question: string; response: string }[]
+    editingQuestionId: number | null;
+    editedQuestion: string;
+    startEditingQuestion: (index: number) => void;
+    saveEditedQuestion: () => void;
+    cancelEditing: () => void;
+    onEditedQuestionChange: (value: string) => void;
 }
 
 export default function ChatSection({
@@ -26,11 +33,17 @@ export default function ChatSection({
     onContentChange,
     responseText,
     handleSubmit: handleSubmitProp,
-    conversation
+    conversation,
+    editingQuestionId,
+    editedQuestion,
+    startEditingQuestion,
+    saveEditedQuestion,
+    cancelEditing,
+    onEditedQuestionChange
 }: ChatSectionProps) {
     const [selectedRole, setSelectedRole] = useState<RoleType>("user")
     const [copied, setCopied] = useState(false)
-    const {isGenerating,setIsGenerating} = useGenerateStore()
+    const { isGenerating, setIsGenerating } = useGenerateStore()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const responseRef = useRef<HTMLDivElement>(null)
 
@@ -52,7 +65,7 @@ export default function ChatSection({
 
     const handleSubmit = async () => {
         setIsGenerating(true)
-        await handleSubmitProp() 
+        await handleSubmitProp()
         setIsGenerating(false)
     }
 
@@ -67,9 +80,8 @@ export default function ChatSection({
             e.preventDefault()
             handleSubmit()
         }
-    }   
+    }
 
-    console.log("this is conversations",conversation)
 
     const adjustTextareaHeight = () => {
         if (textareaRef.current) {
@@ -85,7 +97,7 @@ export default function ChatSection({
     return (
         <Card className="flex flex-col h-full w-full">
             <CardContent className="flex-grow p-4 space-y-4">
-                <ScrollArea className="h-[calc(100vh-350px)] w-full rounded-md border">
+                {/* <ScrollArea className="h-[calc(100vh-350px)] w-full rounded-md border">
                     {conversation.length > 0 ? (
                         conversation.map((item, index) => (
                             <div key={index} className="p-4 realtive group">
@@ -103,7 +115,10 @@ export default function ChatSection({
                                 <span className="sr-only">Copy to clipboard</span>
                             </Button>
                                 <p className="font-semibold ">{selectedRole.toLocaleUpperCase()}:</p>
-                                <pre className="text-sm whitespace-pre-wrap font-sans mb-2 border-blue-200">{item.question}</pre>
+                                <pre className="text-sm flex flex-row justify-between items-center whitespace-pre-wrap font-sans mb-2 border-blue-200 pr-1">
+                                    {item.question}
+                                    <GoPencil onClick={handleEditQuestion}/>
+                                </pre>
                                 <p className="font-semibold ">Response</p>
                                 <ReactMarkdown className="text-sm font-sans prose dark:prose-dark">
                                     {item.response}
@@ -115,7 +130,72 @@ export default function ChatSection({
                             <p className="text-sm">Responses will appear here</p>
                         </div>
                     )}
+                </ScrollArea> */}
+                <ScrollArea className="h-[calc(100vh-350px)] w-full rounded-md border">
+                    {conversation.length > 0 ? (
+                        conversation.map((item, index) => (
+                            <div key={index} className="p-4 relative group">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-2 top-2 opacity-100"
+                                    onClick={copyToClipboard}
+                                >
+                                    {copied ? (
+                                        <Check className="h-4 w-4" />
+                                    ) : (
+                                        <Clipboard className="h-4 w-4" />
+                                    )}
+                                    <span className="sr-only">Copy to clipboard</span>
+                                </Button>
+                                <p className="font-semibold">USER:</p>
+                                <div className="flex items-center gap-2">
+                                    {editingQuestionId === index ? (
+                                        <>
+                                            <input
+                                                type="text"
+                                                value={editedQuestion}
+                                                onChange={(e) =>
+                                                    onEditedQuestionChange(e.target.value)
+                                                }
+                                                className="border rounded p-1 flex-grow"
+                                            />
+                                            <button
+                                                onClick={saveEditedQuestion}
+                                                className="text-blue-500"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                onClick={cancelEditing}
+                                                className="text-gray-500"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-sm flex-grow">{item.question}</p>
+                                            <GoPencil
+                                                className="cursor-pointer text-gray-500"
+                                                onClick={() => startEditingQuestion(index)}
+                                            />
+                                        </>
+                                    )}
+                                </div>
+                                <p className="font-semibold mt-2">Response:</p>
+                                <ReactMarkdown className="text-sm font-sans prose dark:prose-dark">
+                                    {item.response}
+                                </ReactMarkdown>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="h-full flex items-center justify-center text-muted-foreground">
+                            <p className="text-sm">Responses will appear here</p>
+                        </div>
+                    )}
                 </ScrollArea>
+
             </CardContent>
             <CardFooter className="flex flex-col space-y-4">
                 <div className="flex items-center justify-between w-full">
@@ -147,7 +227,7 @@ export default function ChatSection({
                             {content.length} chars
                         </div>
                     </div>
-                    <Button 
+                    <Button
                         onClick={handleSubmit}
                         disabled={!content.trim() || isGenerating}
                         size="icon"

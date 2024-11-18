@@ -6,7 +6,7 @@ import { Plus, X } from "lucide-react";
 import Groq from "groq-sdk";
 import { CompletionUsage } from "groq-sdk/resources/completions.mjs";
 import toast from "react-hot-toast";
-
+import { BsLightningCharge } from "react-icons/bs";
 interface PlaygroundChatProps {
   models: { id: string }[];
 }
@@ -16,8 +16,8 @@ interface ChatPanel {
   selectedModel: string | null;
   response: string;
   usage: CompletionUsage | null;
-  isMatrixVisible: boolean; 
-  conversation: { question: string; response: string }[]; 
+  isMatrixVisible: boolean;
+  conversation: { question: string; response: string }[];
 }
 
 export default function PlaygroundChat({ models }: PlaygroundChatProps) {
@@ -28,10 +28,91 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
       response: "",
       usage: null,
       isMatrixVisible: false,
-      conversation: [] 
+      conversation: []
+    },
+    {
+      id: 2,
+      selectedModel: models[Math.floor(Math.random() * 20)]?.id || null,
+      response: "",
+      usage: null,
+      isMatrixVisible: false,
+      conversation: []
     }
   ]);
   const [sharedContent, setSharedContent] = useState<string>("");
+  const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
+  const [editedQuestion, setEditedQuestion] = useState<string>("");
+
+  const startEditingQuestion = (index: number) => {
+    const questionToEdit = chatPanels[0]?.conversation[index]?.question || "";
+    setEditingQuestionId(index);
+    setEditedQuestion(questionToEdit);
+};
+// const saveEditedQuestion = async () => {
+//   setChatPanels((prev) =>
+//     prev.map((panel) => ({
+//       ...panel,
+//       conversation: panel.conversation.map((item, index) =>
+//         index === editingQuestionId
+//           ? { ...item, question: editedQuestion, response: "" } 
+//           : item
+//       ),
+//     }))
+
+//   );
+//   await updateResponse();
+//   setEditingQuestionId(null);
+//   setEditedQuestion("");
+// };
+
+  const cancelEditing = () => {
+    setEditingQuestionId(null);
+    setEditedQuestion("");
+  };
+
+  const onEditedQuestionChange = (value: string) => {
+    setEditedQuestion(value);
+};
+
+const updateResponse = async () => {
+  const updatedPanels = await Promise.all(
+    chatPanels.map(async (panel) => {
+      try {
+        const chatCompletion = await client.chat.completions.create({
+          model: panel.selectedModel as string,
+          messages: [{ role: "user", content: editedQuestion }],
+        });
+
+        const completionText = chatCompletion.choices[0].message.content || "";
+        const usageDetails = chatCompletion.usage;
+
+        return {
+          ...panel,
+          response: completionText,
+          usage: usageDetails || null,
+          conversation: [
+            ...panel.conversation,
+            { question: editedQuestion, response: completionText }
+          ]
+        };
+      } catch (error) {
+        console.error("Error:", error);
+        return {
+          ...panel,
+          response: "Error fetching response.",
+          usage: null,
+          conversation: [
+            ...panel.conversation,
+            { question: sharedContent, response: "Error fetching response." }
+          ]
+        };
+      }
+    })
+  );
+  setChatPanels(updatedPanels);
+  setSharedContent("");
+}
+
   const client = new Groq({
     apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
     dangerouslyAllowBrowser: true
@@ -44,7 +125,7 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
       response: "",
       usage: null,
       isMatrixVisible: false,
-      conversation:[]
+      conversation: []
     };
     setChatPanels((prev) => [...prev, newPanel]);
   };
@@ -65,14 +146,90 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
     setSharedContent(newContent);
   };
 
-
+  const saveEditedQuestion = async () => {
+    // Create a locally updated version of chatPanels
+    const updatedPanels = chatPanels.map((panel) => ({
+      ...panel,
+      conversation: panel.conversation.map((item, index) => {
+        if (index === Number(editingQuestionId)) {
+          return { ...item, question: editedQuestion, response: "" }; // Clear response for the edited question
+        }
+        return item;
+      }),
+    }));
+  
+    // Update state with the locally updated panels
+    setChatPanels(updatedPanels);
+  
+    // Call updateResponseForPanel directly with updated panels and the question
+    await updateResponseForPanel(editedQuestion, updatedPanels);
+  
+    // Clear editing states
+    setEditingQuestionId(null);
+    setEditedQuestion("");
+  };
+  
+  const updateResponseForPanel = async (question: string, panels: typeof chatPanels) => {
+    // Use the passed panels instead of relying on state
+    const updatedPanels = await Promise.all(
+      panels.map(async (panel) => {
+        // Find the index of the question in the current panel
+        const questionIndex = panel.conversation.findIndex((item) => item.question === question);
+        if (questionIndex === -1) return panel; // Skip if the question is not in this panel
+  
+        try {
+          const chatCompletion = await client.chat.completions.create({
+            model: panel.selectedModel as string,
+            messages: [{ role: "user", content: question }],
+          });
+  
+          const completionText = chatCompletion.choices[0].message.content || "";
+          const usageDetails = chatCompletion.usage;
+  
+          const updatedConversation = panel.conversation.map((item, index) =>
+            index === questionIndex
+              ? { ...item, response: completionText } // Update response for the specific question
+              : item
+          );
+  
+          return {
+            ...panel,
+            response: completionText,
+            usage: usageDetails || null,
+            conversation: updatedConversation,
+          };
+        } catch (error) {
+          console.error("Error:", error);
+  
+          const updatedConversation = panel.conversation.map((item, index) =>
+            index === questionIndex
+              ? { ...item, response: "Error fetching response." }
+              : item
+          );
+  
+          return {
+            ...panel,
+            response: "Error fetching response.",
+            usage: null,
+            conversation: updatedConversation,
+          };
+        }
+      })
+    );
+  
+    // Finally, update the state with the panels containing updated responses
+    setChatPanels(updatedPanels);
+  };
+  
+  
+  // Handle the submit button for all panels
   const handleSubmitAll = async () => {
     const missingModelPanel = chatPanels.find((panel) => panel.selectedModel === null);
     if (missingModelPanel) {
       toast.error("Please select a model for all panels.");
       return;
     }
-
+  
     const updatedPanels = await Promise.all(
       chatPanels.map(async (panel) => {
         try {
@@ -95,9 +252,9 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
           };
         } catch (error) {
           console.error("Error:", error);
-          return { 
-            ...panel, 
-            response: "Error fetching response.", 
+          return {
+            ...panel,
+            response: "Error fetching response.",
             usage: null,
             conversation: [
               ...panel.conversation,
@@ -109,7 +266,7 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
     );
   
     setChatPanels(updatedPanels);
-    setSharedContent("");
+    setSharedContent(""); // Clear shared content after submitting
   };
   
   // Toggle inference matrix visibility for each panel
@@ -134,27 +291,19 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
       {chatPanels.map((panel, index) => (
         <div key={panel.id} className="flex-1 flex flex-col border dark:border-gray-700">
           <div className="p-2 h-auto flex flex-row justify-between  border-b dark:border-gray-700">
-            <div className="flex gap-3">
+            <div className="flex gap-3 justify-around">
               <ModelsDropdown
                 options={models}
                 selectedModel={panel.selectedModel}
                 onModelChange={(modelId) => handleModelChange(panel.id, modelId)}
               />
-              {panel.usage && (
-                <button
-                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded-md"
-                  onMouseEnter={() => handleMouseEnter(panel.id)}
-                  onMouseLeave={() => handleMouseLeave(panel.id)}
-                >
-                view inference 
-                </button>
-              )}
+
             </div>
             <div className="flex-grow relative ">
               {panel.isMatrixVisible && panel.usage && (
-                <div className="absolute top-[40px] right-[93%] z-30 w-[400px] p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-lg">
-                  <p className="font-semibold text-gray-800 dark:text-gray-200">
-                    Inference Details for {panel.selectedModel}
+                <div className="absolute top-[40px] left-[5%] z-30 w-[300px] p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-lg">
+                  <p className="font-semibold text-center text-gray-800 dark:text-gray-200">
+                    Inference Details
                   </p>
                   <p className="text-orange-500 dark:text-orange-500 text-center">
                     Queue Time: {panel.usage.queue_time?.toFixed(3)} seconds
@@ -181,17 +330,27 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
               )}
             </div>
             <div className="flex gap-1">
-              {index === chatPanels.length - 1 && (
+              {panel.usage && (
+                <button
+                  className="px-3 py-1 text-lg text-orange-400 rounded-md"
+                  onMouseEnter={() => handleMouseEnter(panel.id)}
+                  onMouseLeave={() => handleMouseLeave(panel.id)}
+                >
+                  <BsLightningCharge />
+                </button>
+              )}
+              {index === chatPanels.length - 1 && chatPanels.length < 3 && (
                 <div
-                  className="border p-1 items-center justify-center flex rounded-md cursor-pointer bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className=" p-1 items-center justify-center flex rounded-md cursor-pointer hover:text-blue-600 dark:hover:text-blue-600 transition-colors"
                   onClick={addChatPanel}
                 >
                   <Plus size={20} />
                 </div>
               )}
+
               {chatPanels.length > 1 && (
                 <div
-                  className="border p-1 items-center justify-center flex rounded-md cursor-pointer bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  className=" p-1 items-center justify-center flex rounded-md cursor-pointer dark:bg-gray-700 hover:text-red-600 dark:hover:text-red-600 transition-colors"
                   onClick={() => deleteChatPanel(panel.id)}
                 >
                   <X size={20} />
@@ -207,6 +366,12 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
               responseText={panel.response}
               handleSubmit={() => handleSubmitAll()}
               conversation={panel.conversation}
+              editingQuestionId={editingQuestionId}
+              editedQuestion={editedQuestion}
+              startEditingQuestion={startEditingQuestion}
+              saveEditedQuestion={saveEditedQuestion}
+              cancelEditing={cancelEditing}
+              onEditedQuestionChange={onEditedQuestionChange}
             />
           </div>
         </div>
