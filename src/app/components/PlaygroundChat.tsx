@@ -74,44 +74,6 @@ export default function PlaygroundChat({ models }: PlaygroundChatProps) {
     setEditedQuestion(value);
 };
 
-const updateResponse = async () => {
-  const updatedPanels = await Promise.all(
-    chatPanels.map(async (panel) => {
-      try {
-        const chatCompletion = await client.chat.completions.create({
-          model: panel.selectedModel as string,
-          messages: [{ role: "user", content: editedQuestion }],
-        });
-
-        const completionText = chatCompletion.choices[0].message.content || "";
-        const usageDetails = chatCompletion.usage;
-
-        return {
-          ...panel,
-          response: completionText,
-          usage: usageDetails || null,
-          conversation: [
-            ...panel.conversation,
-            { question: editedQuestion, response: completionText }
-          ]
-        };
-      } catch (error) {
-        console.error("Error:", error);
-        return {
-          ...panel,
-          response: "Error fetching response.",
-          usage: null,
-          conversation: [
-            ...panel.conversation,
-            { question: sharedContent, response: "Error fetching response." }
-          ]
-        };
-      }
-    })
-  );
-  setChatPanels(updatedPanels);
-  setSharedContent("");
-}
 
   const client = new Groq({
     apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
@@ -147,30 +109,25 @@ const updateResponse = async () => {
   };
 
   const saveEditedQuestion = async () => {
-    // Create a locally updated version of chatPanels
     const updatedPanels = chatPanels.map((panel) => ({
       ...panel,
       conversation: panel.conversation.map((item, index) => {
         if (index === Number(editingQuestionId)) {
-          return { ...item, question: editedQuestion, response: "" }; // Clear response for the edited question
+          return { ...item, question: editedQuestion, response: "" }; 
         }
         return item;
       }),
     }));
   
-    // Update state with the locally updated panels
     setChatPanels(updatedPanels);
-  
-    // Call updateResponseForPanel directly with updated panels and the question
+
     await updateResponseForPanel(editedQuestion, updatedPanels);
-  
-    // Clear editing states
+
     setEditingQuestionId(null);
     setEditedQuestion("");
   };
   
   const updateResponseForPanel = async (question: string, panels: typeof chatPanels) => {
-    // Use the passed panels instead of relying on state
     const updatedPanels = await Promise.all(
       panels.map(async (panel) => {
         // Find the index of the question in the current panel
@@ -217,12 +174,10 @@ const updateResponse = async () => {
       })
     );
   
-    // Finally, update the state with the panels containing updated responses
     setChatPanels(updatedPanels);
   };
   
   
-  // Handle the submit button for all panels
   const handleSubmitAll = async () => {
     const missingModelPanel = chatPanels.find((panel) => panel.selectedModel === null);
     if (missingModelPanel) {
