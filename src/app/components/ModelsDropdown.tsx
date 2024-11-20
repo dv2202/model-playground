@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
+
 interface DropdownProps {
   options: { id: string }[];
   selectedModel: string | null;
@@ -56,6 +57,7 @@ export default function ModelsDropdown({
           )}
         />
       </Button>
+
       {isOpen && (
         <div className="absolute mt-1 w-full rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 z-50 overflow-hidden">
           <ScrollArea className="max-h-[300px] overflow-y-auto">
@@ -72,7 +74,7 @@ export default function ModelsDropdown({
                     selectedModel === option.id ? "bg-blue-50 dark:bg-blue-900/50" : "hover:bg-gray-50 dark:hover:bg-gray-700"
                   )}
                   onClick={() => {
-                    onModelChange(option.id); 
+                    onModelChange(option.id);
                     setIsOpen(false);
                   }}
                   role="option"

@@ -33,7 +33,7 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="h-[100vh]  bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="h-[100vh]  bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 border-none">
       <div className="max-w-8xl h-full mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <header className="pt-4 h-[80px]">
@@ -62,8 +62,8 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="pt-4">
+        {/* div Content */}
+        <div className="pt-2">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="flex items-center space-x-3 bg-white dark:bg-gray-800 px-6 py-4 rounded-lg shadow-lg">
@@ -87,11 +87,11 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden">
               <PlaygroundChat models={models} />
             </div>
           )}
-        </main>
+        </div>
       </div>
     </div>
   )
