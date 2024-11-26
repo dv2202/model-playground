@@ -9,35 +9,27 @@ import toast from "react-hot-toast";
 import { BsLightningCharge } from "react-icons/bs";
 import { Switch } from "@radix-ui/react-switch";
 import useSyncedTextStore from "../lib/syncedText";
-import OpenAI from 'openai';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu";
-import { Button } from "@/components/ui/button";
-
 interface PlaygroundChatProps {
   models: { id: string }[];
-  openaiModels: any[];
 }
 
-export interface ChatPanel {
+interface ChatPanel {
   id: number;
-  parentModel: string;
   selectedModel: string | null;
   response: string;
   usage: CompletionUsage | null;
   isMatrixVisible: boolean;
   conversation: { question: string; response: string }[];
   content: string;
-  isGeneratingText: boolean;
+  isGeneratingText?: boolean;
 }
 
 
-export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatProps) {
-  const parentModels = ["Groq", "OpenAI"];
+export default function PlaygroundChat({ models }: PlaygroundChatProps) {
   const [chatPanels, setChatPanels] = useState<ChatPanel[]>([
     {
       id: 1,
-      parentModel: parentModels[0],
-      selectedModel: models[3]?.id || null,
+      selectedModel: models[0]?.id || null,
       response: "",
       usage: null,
       isMatrixVisible: false,
@@ -47,42 +39,27 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
     },
     {
       id: 2,
-      parentModel: parentModels[0],
       selectedModel: models[Math.floor(Math.random() * 20)]?.id || null,
       response: "",
       usage: null,
       isMatrixVisible: false,
       conversation: [],
-      content: "",
+      content: "", 
       isGeneratingText: false,
     }
   ]);
-
   const { isSyncedText, setIsSyncedText } = useSyncedTextStore();
+
   const [sharedContent, setSharedContent] = useState<string>("");
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
   const [editedQuestion, setEditedQuestion] = useState<string>("");
-
-  const updateParentModel = (panelId: number, newParentModel: string) => {
-    setChatPanels((prevPanels) =>
-      prevPanels.map((panel) =>
-        panel.id === panelId
-          ? {
-            ...panel,
-            parentModel: newParentModel,
-            selectedModel: newParentModel === "Groq" ? models[0]?.id || null : openaiModels[0]?.id || null,
-          }
-          : panel
-      )
-    );
-  };
 
   const startEditingQuestion = (index: number) => {
     const questionToEdit = chatPanels[0]?.conversation[index]?.question || "";
     setEditingQuestionId(index);
     setEditedQuestion(questionToEdit);
   };
-
+  
 
   const cancelEditing = () => {
     setEditingQuestionId(null);
@@ -98,19 +75,17 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
     apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
     dangerouslyAllowBrowser: true
   });
-
+  
 
   const addChatPanel = () => {
     const newPanel: ChatPanel = {
       id: chatPanels.length + 1,
-      parentModel: parentModels[0],
       selectedModel: models[chatPanels.length % models.length]?.id || null,
       response: "",
       usage: null,
       isMatrixVisible: false,
       conversation: [],
       content: "",
-      isGeneratingText:false
     };
     setChatPanels((prev) => [...prev, newPanel]);
   };
@@ -162,8 +137,9 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
   const updateResponseForPanel = async (question: string, panels: typeof chatPanels) => {
     const updatedPanels = await Promise.all(
       panels.map(async (panel) => {
+        // Find the index of the question in the current panel
         const questionIndex = panel.conversation.findIndex((item) => item.question === question);
-        if (questionIndex === -1) return panel;
+        if (questionIndex === -1) return panel; // Skip if the question is not in this panel
 
         try {
           const chatCompletion = await client.chat.completions.create({
@@ -208,39 +184,32 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
     setChatPanels(updatedPanels);
   };
 
-  function getModelGroupName(
-    modelId: string | null,
-    groupedModels: { group: string; models: { id: string }[] }[]
-  ): string | null {
-    const group = groupedModels.find((group) =>
-      group.models.some((model) => model.id === modelId)
-    );
-
-    return group ? group.group : null;
-  }
-
-
-
-  const handleSubmitAll = async () => {
+  const handleSubmitAll = async (panelId?: number) => {
     const missingModelPanel = chatPanels.find((panel) => panel.selectedModel === null);
     if (missingModelPanel) {
       toast.error("Please select a model for all panels.");
       return;
     }
 
-    const updatedPanels = await Promise.all(
-      chatPanels.map(async (panel) => {
-        // Use individual content for each panel when sync is off
-        const contentToSubmit = isSyncedText ? sharedContent : panel.content;
-        // Skip processing if the panel's content is empty and sync is off
-        if (!contentToSubmit) {
-          return panel;
-        }
-        setChatPanels((prev) =>
-        prev.map((p) =>
-          p.id === panel.id ? { ...p, isGeneratingText: true } : p
+    if (isSyncedText) {
+      setChatPanels((prev) =>
+        prev.map((panel) => ({ ...panel, isGeneratingText: true }))
+      );
+    } else if (panelId !== undefined) {
+      setChatPanels((prev) =>
+        prev.map((panel) =>
+          panel.id === panelId ? { ...panel, isGeneratingText: true } : panel
         )
       );
+    }
+
+    const updatedPanels = await Promise.all(
+      chatPanels.map(async (panel) => {
+        const contentToSubmit = isSyncedText ? sharedContent : panel.content;
+
+        if (!contentToSubmit) {
+          return { ...panel, isGeneratingText: false }; 
+        }
 
         try {
           const chatCompletion = await client.chat.completions.create({
@@ -250,11 +219,12 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
 
           const completionText = chatCompletion.choices[0].message.content || "";
           const usageDetails = chatCompletion.usage;
-          console.log(usageDetails);
+
           return {
             ...panel,
             response: completionText,
             usage: usageDetails || null,
+            isGeneratingText: false,
             conversation: [
               ...panel.conversation,
               { question: contentToSubmit, response: completionText },
@@ -266,6 +236,7 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
             ...panel,
             response: "Error fetching response.",
             usage: null,
+            isGeneratingText: false,
             conversation: [
               ...panel.conversation,
               { question: contentToSubmit, response: "Error fetching response." },
@@ -280,9 +251,12 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
     if (isSyncedText) {
       setSharedContent("");
     }
-  };
+};
 
 
+
+
+  // Toggle inference matrix visibility for each panel
   const handleMouseEnter = (id: number) => {
     setChatPanels((prev) =>
       prev.map((panel) =>
@@ -299,68 +273,86 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
     );
   };
 
+
   return (
-    <div className="relative w-full h-auto flex flex-wrap border-none bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300 overflow-x-auto">
+    <div className="relative w-full h-full flex border-none bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300 overflow-x-auto">
       {chatPanels.map((panel, index) => (
-        <div
-          key={panel.id}
-          className={`flex-1 min-w-[300px] flex flex-col border-gray-300 dark:border-gray-700 ${index < chatPanels.length - 1 ? "border-r dark:border-gray-700" : ""
-            }`}
-        >
-          {/* Panel Header */}
-          <div className="p-2 h-auto flex flex-wrap justify-around items-center border-b dark:border-gray-700 gap-2">
-            <div className="flex gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="px-3 py-2 h-[44px] border rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 outline-none"
-                  >
-                    {panel.parentModel}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="mt-2 w-fit bg-white rounded-lg shadow-lg border border-gray-200"
-                >
-                  {parentModels.map((model, index) => (
-                    <DropdownMenuItem
-                      key={index}
-                      onClick={() => updateParentModel(panel.id, model)}
-                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer rounded-md "
-                    >
-                      {model}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+        <div key={panel.id}
+        className={`flex-1 flex flex-col dark:border-gray-700 ${
+          index < chatPanels.length - 1 ? "border-r border-gray-300 dark:border-gray-700" : ""
+        }`}>
+          <div className="p-2 h-auto flex flex-row justify-between  border-b dark:border-gray-700">
+            <div className="flex gap-3 justify-around">
               <ModelsDropdown
-                options={panel.parentModel === "Groq" ? models : openaiModels}
+                options={models}
                 selectedModel={panel.selectedModel}
                 onModelChange={(modelId) => handleModelChange(panel.id, modelId)}
               />
-            </div>
-            
-            <div
-              className="relative flex-grow flex flex-col sm:flex-row gap-2 sm:gap-4 sm:items-center justify-end"
-            >
-              <label className="flex items-center gap-2">
-                {isSyncedText && <span className="text-sm">Sync Content</span>}
-                <Switch
-                  checked={isSyncedText}
-                  onCheckedChange={(checked) => setIsSyncedText(checked)}
-                  className={`w-7 h-4 rounded-full relative transition-colors ${isSyncedText ? "bg-black" : "bg-gray-300"
-                    }`}
-                >
-                  <span
-                    className={`block w-2 h-2 bg-white rounded-full absolute top-1 transition-transform ${isSyncedText ? "translate-x-4" : "translate-x-1"
-                      }`}
-                  />
-                </Switch>
-              </label>
 
-              {/* Add/Remove Panel */}
+            </div>
+            <div className="flex-grow relative ">
+              {panel.isMatrixVisible && panel.usage && (
+                <div className="absolute top-[40px] left-[5%] z-30 w-[300px] p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-lg">
+                  <p className="font-semibold text-center text-gray-800 dark:text-gray-200">
+                    Inference Details
+                  </p>
+                  <p className="text-orange-500 dark:text-orange-500 text-center">
+                    Queue Time: {panel.usage.queue_time?.toFixed(3)} seconds
+                  </p>
+                  <p className="text-orange-500 dark:text-orange-500 text-center">
+                    Prompt Tokens: {panel.usage.prompt_tokens?.toFixed(3)}
+                  </p>
+                  <p className="text-orange-500 dark:text-orange-500 text-center">
+                    Prompt Time: {panel.usage.prompt_time?.toFixed(3)} seconds
+                  </p>
+                  <p className="text-orange-500 dark:text-orange-500 text-center">
+                    Completion Tokens: {panel.usage.completion_tokens?.toFixed(3)}
+                  </p>
+                  <p className="text-orange-500 dark:text-orange-500 text-center">
+                    Completion Time: {panel.usage.completion_time?.toFixed(3)} seconds
+                  </p>
+                  <p className="text-orange-500 dark:text-orange-500 text-center">
+                    Total Tokens: {panel.usage.total_tokens?.toFixed(3)}
+                  </p>
+                  <p className="text-orange-500 dark:text-orange-500 text-center">
+                    Total Time: {panel.usage.total_time?.toFixed(3)} seconds
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-1">
+              <div className="flex justify-end p-2">
+                <label className="flex items-center gap-2">
+                  {
+                    isSyncedText && (
+                      <span className="text-sm">Sync Content</span>
+                    )
+                  }
+                  <Switch
+                    checked={isSyncedText}
+                    onCheckedChange={(checked) => setIsSyncedText(checked)}
+                    className={`w-7 h-4 rounded-full relative transition-colors ${isSyncedText ? "bg-black" : "bg-gray-300"
+                      }`}
+                  >
+                    <span
+                      className={`block w-2 h-2 bg-white rounded-full absolute top-1 transition-transform ${isSyncedText ? "translate-x-4" : "translate-x-1"
+                        }`}
+                    />
+                  </Switch>
+                </label>
+              </div>
+              {panel.usage && (
+                <button
+                  className="px-3 py-1 text-lg text-orange-400 rounded-md"
+                  onMouseEnter={() => handleMouseEnter(panel.id)}
+                  onMouseLeave={() => handleMouseLeave(panel.id)}
+                >
+                  <BsLightningCharge />
+                </button>
+              )}
               {index === chatPanels.length - 1 && chatPanels.length < 3 && (
                 <div
-                  className="p-1 items-center justify-center flex rounded-md cursor-pointer hover:text-blue-600 dark:hover:text-blue-600 transition-colors"
+                  className=" p-1 items-center justify-center flex rounded-md cursor-pointer hover:text-blue-600 dark:hover:text-blue-600 transition-colors"
                   onClick={addChatPanel}
                 >
                   <Plus size={20} />
@@ -369,7 +361,7 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
 
               {chatPanels.length > 1 && (
                 <div
-                  className="p-1 items-center justify-center flex rounded-md cursor-pointer dark:bg-gray-700 hover:text-red-600 dark:hover:text-red-600 transition-colors"
+                  className=" p-1 items-center justify-center flex rounded-md cursor-pointer dark:bg-gray-700 hover:text-red-600 dark:hover:text-red-600 transition-colors"
                   onClick={() => deleteChatPanel(panel.id)}
                 >
                   <X size={20} />
@@ -377,8 +369,6 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
               )}
             </div>
           </div>
-
-          {/* Chat Section */}
           <div className="flex-grow h-[90%] bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-200 border-none">
             <ChatSection
               panelId={panel.id}
@@ -394,13 +384,12 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
               saveEditedQuestion={saveEditedQuestion}
               cancelEditing={cancelEditing}
               onEditedQuestionChange={onEditedQuestionChange}
-              completionUsage={panel.usage}
               isGeneratingText={panel.isGeneratingText}
             />
+
           </div>
         </div>
       ))}
     </div>
-
-  )
+  );
 }
