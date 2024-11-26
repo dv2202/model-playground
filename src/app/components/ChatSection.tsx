@@ -8,12 +8,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "react-hot-toast";
 import ReactMarkdown from "react-markdown";
 import { GoPencil } from "react-icons/go";
-import { BsLightningCharge } from "react-icons/bs";
 
 type RoleType = "user" | "assistant";
 
 interface ChatSectionProps {
-  panelId: string;
+  panelId: number;
   selectedModel: string | null;
   content: string;
   onContentChange: (newContent: string) => void;
@@ -22,12 +21,12 @@ interface ChatSectionProps {
   conversation: { question: string; response: string }[];
   editingQuestionId: number | null;
   editedQuestion: string;
-  startEditingQuestion: (index: number) => void;
-  saveEditedQuestion: () => void;
-  cancelEditing: () => void;
-  completionUsage: any;
-  onEditedQuestionChange: (value: string) => void;
-  isGeneratingText: boolean; // Proper prop definition for spinner handling
+  startEditingQuestion: (panelId: number, index: number) => void;
+  saveEditedQuestion: (panelId: number) => void;
+  cancelEditing: (panelId: number) => void;
+  // completionUsage: any;
+  onEditedQuestionChange: (panelId: number, value: string) => void;
+  isGeneratingText: boolean;
 }
 
 export default function ChatSection({
@@ -43,14 +42,13 @@ export default function ChatSection({
   saveEditedQuestion,
   cancelEditing,
   onEditedQuestionChange,
-  completionUsage,
+  // completionUsage,
   isGeneratingText,
 }: ChatSectionProps) {
   const [selectedRole, setSelectedRole] = useState<RoleType>("user");
   const [copied, setCopied] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const responseRef = useRef<HTMLDivElement>(null);
-  const [showMatrix, setShowMatrix] = useState(false);
+  const responseAreaRef = useRef(null);
 
   const toggleRole = (value: string) => {
     setSelectedRole(value as RoleType);
@@ -69,12 +67,21 @@ export default function ChatSection({
   };
 
   const handleSubmit = async () => {
-    await handleSubmitProp();
+    try {
+      await handleSubmitProp();
+    } catch (error) {
+      toast.error("Error submitting message");
+      console.error(error);
+    }
   };
-  
+
   useEffect(() => {
-    if (responseRef.current) {
-      responseRef.current.scrollTop = responseRef.current.scrollHeight;
+    if (responseAreaRef.current) {
+      const responseDiv = responseAreaRef.current as HTMLElement;
+      responseDiv.scrollTo({
+        top: responseDiv.scrollHeight,
+        behavior: "smooth", 
+      });
     }
   }, [conversation]);
 
@@ -98,21 +105,23 @@ export default function ChatSection({
   useEffect(() => {
     adjustTextareaHeight();
   }, [content]);
-
   return (
     <Card className="flex flex-col h-[100%] w-full border-none rounded-none">
       {/* Content */}
       <CardContent className="flex-grow p-2 space-y-4 border-b-2 border-t-1 shadow-none rounded-none min-h-[400px]">
-        <ScrollArea className="md:h-[calc(100vh-350px)] w-full sm:h-[calc(100vh-200px)] ">
+        <ScrollArea
+          className="md:h-[calc(100vh-350px)] w-full sm:h-[calc(100vh-200px)] "
+          ref={responseAreaRef} 
+        >
           {conversation.length > 0 ? (
             conversation.map((item, index) => (
               <div
                 key={index}
-                className="p-4 relative group break-words border-b  text-sm sm:text-base"
+                className="p-4 relative group break-words border-b text-sm sm:text-base"
               >
                 <div className="flex items-center justify-between">
                   <p className="font-semibold">{selectedRole.toUpperCase()}</p>
-                  <div className="flex items-center gap-2">
+                  {/* <div className="flex items-center gap-2">
                     <button
                       className="px-3 py-1 text-lg text-orange-400 rounded-md"
                       onMouseEnter={() => setShowMatrix(true)}
@@ -120,9 +129,9 @@ export default function ChatSection({
                     >
                       <BsLightningCharge />
                     </button>
-                  </div>
+                  </div> */}
                 </div>
-                {showMatrix && (
+                {/* {showMatrix && (
                   <div className="absolute top-[40px] right-[5%] z-30 w-[300px] p-4 bg-gray-100 dark:bg-gray-800 rounded-md shadow-lg">
                     <p className="font-semibold text-center text-gray-800 dark:text-gray-200">
                       Inference Details
@@ -149,24 +158,24 @@ export default function ChatSection({
                       Total Time: {completionUsage.total_time?.toFixed(3)} seconds
                     </p>
                   </div>
-                )}
+                )} */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {editingQuestionId === index ? (
                     <>
                       <input
                         type="text"
                         value={editedQuestion}
-                        onChange={(e) => onEditedQuestionChange(e.target.value)}
+                        onChange={(e) => onEditedQuestionChange(panelId, e.target.value)}
                         className="border rounded p-1 flex-grow w-full"
                       />
                       <button
-                        onClick={saveEditedQuestion}
+                        onClick={() => saveEditedQuestion(panelId)}
                         className="text-blue-500"
                       >
                         Save
                       </button>
                       <button
-                        onClick={cancelEditing}
+                        onClick={() => cancelEditing(panelId)}
                         className="text-gray-500"
                       >
                         Cancel
@@ -177,25 +186,25 @@ export default function ChatSection({
                       <p className="text-sm flex-grow">{item.question}</p>
                       <GoPencil
                         className="cursor-pointer text-gray-500 mr-3"
-                        onClick={() => startEditingQuestion(panelId,index)}
+                        onClick={() => startEditingQuestion(panelId, index)}
                       />
                     </>
                   )}
                 </div>
                 <div className="flex flex-row items-center justify-between ">
-                <p className="font-semibold mt-2">Response:</p>
-                <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={copyToClipboard}
-                    >
-                      {copied ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Clipboard className="h-4 w-4" />
-                      )}
-                      <span className="sr-only">Copy to clipboard</span>
-                    </Button>
+                  <p className="font-semibold mt-2">Response:</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={copyToClipboard}
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Clipboard className="h-4 w-4" />
+                    )}
+                    <span className="sr-only">Copy to clipboard</span>
+                  </Button>
                 </div>
                 
                 <ReactMarkdown className="prose dark:prose-dark">
@@ -251,9 +260,6 @@ export default function ChatSection({
               placeholder="Type your message..."
               className="min-h-[44px] resize-none pr-16"
             />
-            <div className="absolute right-3 bottom-3 text-xs text-muted-foreground">
-              {content.length} chars
-            </div>
           </div>
           <Button
             onClick={handleSubmit}

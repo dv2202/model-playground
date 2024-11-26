@@ -6,12 +6,10 @@ import { Plus, X } from "lucide-react";
 import Groq from "groq-sdk";
 import { CompletionUsage } from "groq-sdk/resources/completions.mjs";
 import toast from "react-hot-toast";
-import { BsLightningCharge } from "react-icons/bs";
 import { Switch } from "@radix-ui/react-switch";
 import useSyncedTextStore from "../lib/syncedText";
-import OpenAI from 'openai';
+
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu";
-import { Button } from "@/components/ui/button";
 
 interface PlaygroundChatProps {
   models: { id: string }[];
@@ -60,8 +58,8 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
 
   const { isSyncedText, setIsSyncedText } = useSyncedTextStore();
   const [sharedContent, setSharedContent] = useState<string>("");
-  const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
-  const [editedQuestion, setEditedQuestion] = useState<string>("");
+  const [editingQuestionIds, setEditingQuestionIds] = useState<Record<number, number | null>>({});
+  const [editedQuestions, setEditedQuestions] = useState<Record<number, string>>({});
 
   const updateParentModel = (panelId: number, newParentModel: string) => {
     setChatPanels((prevPanels) =>
@@ -77,22 +75,22 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
     );
   };
 
-  const startEditingQuestion = (index: number) => {
-    const questionToEdit = chatPanels[0]?.conversation[index]?.question || "";
-    setEditingQuestionId(index);
-    setEditedQuestion(questionToEdit);
+  const startEditingQuestion = (panelId: number, index: number) => {
+
+    const questionToEdit = chatPanels.find(panel => panel.id === panelId)?.conversation[index]?.question || "";
+    setEditingQuestionIds((prev) => ({ ...prev, [panelId]: index }));
+    setEditedQuestions((prev) => ({ ...prev, [panelId]: questionToEdit }));
   };
 
 
-  const cancelEditing = () => {
-    setEditingQuestionId(null);
-    setEditedQuestion("");
+  const cancelEditing = (panelId: number) => {
+    setEditingQuestionIds((prev) => ({ ...prev, [panelId]: null }));
+    setEditedQuestions((prev) => ({ ...prev, [panelId]: "" }));
   };
 
-  const onEditedQuestionChange = (value: string) => {
-    setEditedQuestion(value);
+  const onEditedQuestionChange = (panelId: number, value: string) => {
+    setEditedQuestions((prev) => ({ ...prev, [panelId]: value }));
   };
-
 
   const client = new Groq({
     apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
@@ -110,7 +108,7 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
       isMatrixVisible: false,
       conversation: [],
       content: "",
-      isGeneratingText:false
+      isGeneratingText: false
     };
     setChatPanels((prev) => [...prev, newPanel]);
   };
@@ -140,84 +138,208 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
   };
 
 
-  const saveEditedQuestion = async () => {
-    const updatedPanels = chatPanels.map((panel) => ({
-      ...panel,
-      conversation: panel.conversation.map((item, index) => {
-        if (index === Number(editingQuestionId)) {
-          return { ...item, question: editedQuestion, response: "" };
-        }
-        return item;
-      }),
-    }));
+  // const saveEditedQuestion = async (panelId: number) => {
+  //   const updatedPanels = chatPanels.map((panel) => ({
+  //     ...panel,
+  //     conversation: panel.conversation.map((item, index) => {
+  //       if (index === editingQuestionIds[panelId]) {
+  //         return { ...item, question: editedQuestions[panelId], response: "" };
+  //       }
+  //       return item;
+  //     }),
+  //   }));
 
+  //   setChatPanels(updatedPanels);
+
+  //   await updateResponseForPanel(editedQuestions[panelId], updatedPanels);
+
+  //   setEditingQuestionIds((prev) => ({ ...prev, [panelId]: null }));
+  //   setEditedQuestions((prev) => ({ ...prev, [panelId]: "" }));
+  // };
+
+  const saveEditedQuestion = async (panelId: number) => {
+    const updatedPanels = chatPanels.map((panel) => {
+      if (panel.id === panelId) {
+        const updatedConversation = panel.conversation.map((item, index) => {
+          if (index === editingQuestionIds[panelId]) {
+            return { ...item, question: editedQuestions[panelId], response: "" };
+          }
+          return item;
+        });
+        return {
+          ...panel,
+          conversation: updatedConversation,
+        };
+      }
+      return panel;
+    });
+  
+    // Update the state with the new panels
     setChatPanels(updatedPanels);
-
-    await updateResponseForPanel(editedQuestion, updatedPanels);
-
-    setEditingQuestionId(null);
-    setEditedQuestion("");
+    // Update the response for the edited question in the specified panel
+    await updateResponseForPanel(editedQuestions[panelId], updatedPanels);
+    
+    // Reset the editing state for the specified panel
+    setEditingQuestionIds((prev) => ({ ...prev, [panelId]: null }));
+    setEditedQuestions((prev) => ({ ...prev, [panelId]: "" }));
   };
+  
 
   const updateResponseForPanel = async (question: string, panels: typeof chatPanels) => {
+    
     const updatedPanels = await Promise.all(
       panels.map(async (panel) => {
-        const questionIndex = panel.conversation.findIndex((item) => item.question === question);
-        if (questionIndex === -1) return panel;
-
-        try {
-          const chatCompletion = await client.chat.completions.create({
-            model: panel.selectedModel as string,
-            messages: [{ role: "user", content: question }],
-          });
-
-          const completionText = chatCompletion.choices[0].message.content || "";
-          const usageDetails = chatCompletion.usage;
-
-          const updatedConversation = panel.conversation.map((item, index) =>
-            index === questionIndex
-              ? { ...item, response: completionText }
-              : item
-          );
-
-          return {
-            ...panel,
-            response: completionText,
-            usage: usageDetails || null,
-            conversation: updatedConversation,
-          };
-        } catch (error) {
-          console.error("Error:", error);
-
-          const updatedConversation = panel.conversation.map((item, index) =>
-            index === questionIndex
-              ? { ...item, response: "Error fetching response." }
-              : item
-          );
-
-          return {
-            ...panel,
-            response: "Error fetching response.",
-            usage: null,
-            conversation: updatedConversation,
-          };
+        // Check if sync is off and ensure we only update the current panel's response
+        if (isSyncedText) {
+          // If sync is on, update responses for all panels
+          const questionIndex = panel.conversation.findIndex((item) => item.question === question);
+          if (questionIndex === -1) return panel;
+  
+          try {
+            const chatCompletion = await client.chat.completions.create({
+              model: panel.selectedModel as string,
+              messages: [{ role: "user", content: question }],
+            });
+  
+            const completionText = chatCompletion.choices[0].message.content || "";
+            const usageDetails = chatCompletion.usage;
+  
+            const updatedConversation = panel.conversation.map((item, index) =>
+              index === questionIndex
+                ? { ...item, response: completionText }
+                : item
+            );
+  
+            return {
+              ...panel,
+              response: completionText,
+              usage: usageDetails || null,
+              conversation: updatedConversation,
+            };
+          } catch (error) {
+            console.error("Error:", error);
+  
+            const updatedConversation = panel.conversation.map((item, index) =>
+              index === questionIndex
+                ? { ...item, response: "Error fetching response." }
+                : item
+            );
+  
+            return {
+              ...panel,
+              response: "Error fetching response.",
+              usage: null,
+              conversation: updatedConversation,
+            };
+          }
+        } else {
+          // If sync is off, only generate a response for the panel that is submitting the question
+          const questionIndex = panel.conversation.findIndex((item) => item.question === question);
+          if (questionIndex === -1) return panel;
+          
+          try {
+            const chatCompletion = await client.chat.completions.create({
+              model: panel.selectedModel as string,
+              messages: [{ role: "user", content: question }],
+            });
+  
+            const completionText = chatCompletion.choices[0].message.content || "";
+            const usageDetails = chatCompletion.usage;
+            
+            const updatedConversation = panel.conversation.map((item, index) =>
+              index === questionIndex
+                ? { ...item, response: completionText }
+                : item
+            );
+  
+            return {
+              ...panel,
+              response: completionText,
+              usage: usageDetails || null,
+              conversation: updatedConversation,
+            };
+          } catch (error) {
+            console.error("Error:", error);
+  
+            const updatedConversation = panel.conversation.map((item, index) =>
+              index === questionIndex
+                ? { ...item, response: "Error fetching response." }
+                : item
+            );
+  
+            return {
+              ...panel,
+              response: "Error fetching response.",
+              usage: null,
+              conversation: updatedConversation,
+            };
+          }
         }
       })
     );
-
+  
     setChatPanels(updatedPanels);
   };
 
-  function getModelGroupName(
-    modelId: string | null,
-    groupedModels: { group: string; models: { id: string }[] }[]
-  ): string | null {
-    const group = groupedModels.find((group) =>
-      group.models.some((model) => model.id === modelId)
-    );
+  // const updateResponseForPanel = async (question: string, panels: typeof chatPanels) => {
+  //   const updatedPanels = await Promise.all(
+  //     panels.map(async (panel) => {
+  //       const questionIndex = panel.conversation.findIndex((item) => item.question === question);
+  //       if (questionIndex === -1) return panel;
 
-    return group ? group.group : null;
-  }
+  //       try {
+  //         const chatCompletion = await client.chat.completions.create({
+  //           model: panel.selectedModel as string,
+  //           messages: [{ role: "user", content: question }],
+  //         });
+
+  //         const completionText = chatCompletion.choices[0].message.content || "";
+  //         const usageDetails = chatCompletion.usage;
+
+  //         const updatedConversation = panel.conversation.map((item, index) =>
+  //           index === questionIndex
+  //             ? { ...item, response: completionText }
+  //             : item
+  //         );
+
+  //         return {
+  //           ...panel,
+  //           response: completionText,
+  //           usage: usageDetails || null,
+  //           conversation: updatedConversation,
+  //         };
+  //       } catch (error) {
+  //         console.error("Error:", error);
+
+  //         const updatedConversation = panel.conversation.map((item, index) =>
+  //           index === questionIndex
+  //             ? { ...item, response: "Error fetching response." }
+  //             : item
+  //         );
+
+  //         return {
+  //           ...panel,
+  //           response: "Error fetching response.",
+  //           usage: null,
+  //           conversation: updatedConversation,
+  //         };
+  //       }
+  //     })
+  //   );
+
+  //   setChatPanels(updatedPanels);
+  // };
+
+  // function getModelGroupName(
+  //   modelId: string | null,
+  //   groupedModels: { group: string; models: { id: string }[] }[]
+  // ): string | null {
+  //   const group = groupedModels.find((group) =>
+  //     group.models.some((model) => model.id === modelId)
+  //   );
+
+  //   return group ? group.group : null;
+  // }
 
 
 
@@ -232,15 +354,15 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
       chatPanels.map(async (panel) => {
         // Use individual content for each panel when sync is off
         const contentToSubmit = isSyncedText ? sharedContent : panel.content;
-        // Skip processing if the panel's content is empty and sync is off
+
         if (!contentToSubmit) {
           return panel;
         }
         setChatPanels((prev) =>
-        prev.map((p) =>
-          p.id === panel.id ? { ...p, isGeneratingText: true } : p
-        )
-      );
+          prev.map((p) =>
+            p.id === panel.id ? { ...p, isGeneratingText: true } : p
+          )
+        );
 
         try {
           const chatCompletion = await client.chat.completions.create({
@@ -277,27 +399,33 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
 
     setChatPanels(updatedPanels);
 
+    setChatPanels((prevPanels) =>
+    prevPanels.map((panel) => ({
+      ...panel,
+      content: isSyncedText ? sharedContent : "", // Reset content for all panels or use sharedContent
+    })));
+
     if (isSyncedText) {
       setSharedContent("");
     }
   };
 
 
-  const handleMouseEnter = (id: number) => {
-    setChatPanels((prev) =>
-      prev.map((panel) =>
-        panel.id === id ? { ...panel, isMatrixVisible: true } : panel
-      )
-    );
-  };
+  // const handleMouseEnter = (id: number) => {
+  //   setChatPanels((prev) =>
+  //     prev.map((panel) =>
+  //       panel.id === id ? { ...panel, isMatrixVisible: true } : panel
+  //     )
+  //   );
+  // };
 
-  const handleMouseLeave = (id: number) => {
-    setChatPanels((prev) =>
-      prev.map((panel) =>
-        panel.id === id ? { ...panel, isMatrixVisible: false } : panel
-      )
-    );
-  };
+  // const handleMouseLeave = (id: number) => {
+  //   setChatPanels((prev) =>
+  //     prev.map((panel) =>
+  //       panel.id === id ? { ...panel, isMatrixVisible: false } : panel
+  //     )
+  //   );
+  // };
 
   return (
     <div className="relative w-full h-auto flex flex-wrap border-none bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 transition-colors duration-300 overflow-x-auto">
@@ -338,7 +466,7 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
                 onModelChange={(modelId) => handleModelChange(panel.id, modelId)}
               />
             </div>
-            
+
             <div
               className="relative flex-grow flex flex-col sm:flex-row gap-2 sm:gap-4 sm:items-center justify-end"
             >
@@ -386,17 +514,18 @@ export default function PlaygroundChat({ models, openaiModels }: PlaygroundChatP
               content={isSyncedText ? sharedContent : panel.content}
               onContentChange={(newContent) => handleContentChange(panel.id, newContent)}
               responseText={panel.response}
-              handleSubmit={() => handleSubmitAll(panel.id)}
+              handleSubmit={() => handleSubmitAll()}
               conversation={panel.conversation}
-              editingQuestionId={editingQuestionId}
-              editedQuestion={editedQuestion}
+              editingQuestionId={editingQuestionIds[panel.id]}  
+              editedQuestion={editedQuestions[panel.id]} 
               startEditingQuestion={startEditingQuestion}
               saveEditedQuestion={saveEditedQuestion}
               cancelEditing={cancelEditing}
               onEditedQuestionChange={onEditedQuestionChange}
-              completionUsage={panel.usage}
+              // completionUsage={panel.usage}
               isGeneratingText={panel.isGeneratingText}
             />
+
           </div>
         </div>
       ))}
