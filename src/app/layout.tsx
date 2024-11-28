@@ -1,7 +1,11 @@
-import type { Metadata } from "next";
+'use client';
+
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
+import { SessionProvider } from "next-auth/react";
+import { Sidebar } from "./Sidebar";
+import { usePathname } from "next/navigation";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -14,23 +18,32 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
-export const metadata: Metadata = {
-  title: "AI Models Playground",
-  description: "Created by Devansh Vishwakarma",
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = usePathname();
+
+  // Check if the current route is the login page
+  const isLoginPage = pathname === "/login";
+
   return (
     <html lang="en">
+      <head>
+        <title>AI Models Playground</title>
+        <meta name="description" content="Created by Devansh Vishwakarma" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased flex`}
       >
-        <Toaster position="top-right" />
-        {children}
+        <SessionProvider>
+          <Toaster position="top-right" />
+          {!isLoginPage && <Sidebar />}
+          <main className="flex-1">{children}</main>
+        </SessionProvider>
       </body>
     </html>
   );

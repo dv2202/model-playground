@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  email       String   @unique
+  profilePic  String?  // Nullable for optional profile picture
+  createdAt   DateTime @default(now())
+  chats       Chat[]   // Relation: A user can have multiple chats
+}
+
+model Chat {
+  id               String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String         @db.ObjectId // Foreign key to User
+  user             User           @relation(fields: [userId], references: [id])
+  parentModel      String         // Name of the parent model
+  selectedModel    String?        // Nullable to handle cases where a model isn't selected
+  response         String?        // The AI-generated response
+  isMatrixVisible  Boolean        @default(false)
+  conversation     Json?          // JSON to store conversation history
+  content          String         // User's input/content
+  isGeneratingText Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  chatId           String 
+  panelId          Int
+   @@index([chatId]) 
+}

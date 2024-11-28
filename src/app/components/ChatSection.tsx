@@ -8,6 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "react-hot-toast";
 import ReactMarkdown from "react-markdown";
 import { GoPencil } from "react-icons/go";
+import { useSession } from "next-auth/react";
 
 type RoleType = "user" | "assistant";
 
@@ -49,6 +50,7 @@ export default function ChatSection({
   const [copied, setCopied] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const responseAreaRef = useRef(null);
+  const { data: session } = useSession();
 
   const toggleRole = (value: string) => {
     setSelectedRole(value as RoleType);
@@ -68,12 +70,17 @@ export default function ChatSection({
 
   const handleSubmit = async () => {
     try {
-      await handleSubmitProp();
+      if (session?.user) {
+        await handleSubmitProp();
+      } else {
+        toast.error("Please sign in to send a message");
+      }
     } catch (error) {
       toast.error("Error submitting message");
       console.error(error);
     }
   };
+  
 
   useEffect(() => {
     if (responseAreaRef.current) {

@@ -1,5 +1,4 @@
 'use client'
-
 import { useEffect, useState } from "react"
 import axios from "axios"
 import PlaygroundChat from "./components/PlaygroundChat"
@@ -10,7 +9,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [openaiModels, setOpenaiModels] = useState<any[]>([]);
-  
+
   const getModels = async () => {
     try {
       setLoading(true)
@@ -42,11 +41,11 @@ export default function Home() {
       setOpenaiModels(sortedModels);
     } catch (error) {
       console.error("Failed to fetch OpenAI models:", error);
-    }finally{
+    } finally {
       setLoading(false)
     }
   };
-  
+
 
   useEffect(() => {
     getModels()
@@ -73,12 +72,14 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-gray-700 rounded-full shadow-md">
-                <Code2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200">
-                  {models.length} Models Available
-                </span>
+            <div className="relative left-[30%] md:left-0">
+              <div className="flex items-center  space-x-4">
+                <div className="flex items-center md:left-0 space-x-2  px-4 py-2 bg-white dark:bg-gray-700 rounded-full shadow-md">
+                  <Code2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {models.length} Models Available
+                  </span>
+                </div>
               </div>
             </div>
           </div>
